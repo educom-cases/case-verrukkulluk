@@ -1,0 +1,32 @@
+name: Educom daily compliance
+on:
+  schedule:
+    # Run after 17:30 Amsterdam time in both CET and CEST.
+    - cron: '40 15,16 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date to check (YYYY-MM-DD); empty = today in Amsterdam'
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: Check repository compliance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_DATE: ${{ inputs.date }}
+        run: |
+          # The second scheduled run is intentionally skipped if it is before
+          # the Amsterdam 17:30 cutoff; DST is handled by the checker.
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            local_hour=$(TZ=Europe/Amsterdam date +%H)
+            if (( 10#$local_hour < 17 || 10#$local_hour > 18 )); then exit 0; fi
+          fi
+          zsh scripts/check-compliance.zsh "${{ github.server_url }}/${{ github.repository }}" ${REPORT_DATE:+"$REPORT_DATE"}
